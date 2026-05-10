@@ -14,7 +14,7 @@ const path      = require("path");
 
 // ─── CONFIG ──────────────────────────────────────────
 // Must match TOPIC_PREFIX in your Arduino sketches
-const TOPIC_PREFIX = process.env.TOPIC_PREFIX || "myiot";
+const TOPIC_PREFIX = process.env.TOPIC_PREFIX || "tillas_iot";
 const PORT         = process.env.PORT || 3000;
 const MQTT_BROKER  = "mqtt://broker.hivemq.com:1883";
 
