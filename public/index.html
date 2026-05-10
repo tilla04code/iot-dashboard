@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IoT Dashboard</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:     #080d17;
+  --panel:  #0f1622;
+  --card:   #151f30;
+  --border: #1c2a40;
+  --c1:     #38bdf8;
+  --c2:     #34d399;
+  --warn:   #fbbf24;
+  --danger: #f87171;
+  --text:   #dde6f0;
+  --muted:  #556070;
+  --mono:   'JetBrains Mono', monospace;
+  --sans:   'Space Grotesk', sans-serif;
+  --r:      12px;
+}
+*, *::before, *::after { box-sizing: border-box; margin:0; padding:0; }
+body { font-family: var(--sans); background: var(--bg); color: var(--text); min-height:100vh; }
+ 
+/* HEADER */
+header {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:16px 28px; background:var(--panel);
+  border-bottom:1px solid var(--border); position:sticky; top:0; z-index:200;
+}
+.logo { display:flex; align-items:center; gap:10px; font-size:17px; font-weight:600; }
+.pulse-ring {
+  width:12px; height:12px; border-radius:50%; background:var(--c1);
+  box-shadow:0 0 0 0 rgba(56,189,248,.5);
+  animation:ping 2s ease-in-out infinite;
+}
+@keyframes ping { 0%,100%{box-shadow:0 0 0 0 rgba(56,189,248,.5)} 50%{box-shadow:0 0 0 8px rgba(56,189,248,0)} }
+ 
+.badge {
+  font-family:var(--mono); font-size:11px; padding:4px 10px;
+  border-radius:20px; border:1px solid; transition:all .4s;
+}
+.badge.off { color:var(--danger); border-color:rgba(248,113,113,.4); background:rgba(248,113,113,.08); }
+.badge.on  { color:var(--c2);    border-color:rgba(52,211,153,.4);   background:rgba(52,211,153,.08); }
+ 
+/* GRID */
+.wrap { max-width:1320px; margin:0 auto; padding:22px 24px; }
+.map-row { margin-bottom:20px; }
+ 
+.grid { display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+@media(max-width:760px){ .grid{grid-template-columns:1fr;} .wrap{padding:14px;} }
+ 
+/* PANELS */
+.panel {
+  background:var(--panel); border:1px solid var(--border);
+  border-radius:var(--r); overflow:hidden;
+}
+.ph {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:13px 18px; border-bottom:1px solid var(--border);
+}
+.ph-title { display:flex; align-items:center; gap:8px; font-size:13px; font-weight:600; }
+.dot { width:8px; height:8px; border-radius:50%; flex-shrink:0; }
+.d1 { background:var(--c1); box-shadow:0 0 6px var(--c1); }
+.d2 { background:var(--c2); box-shadow:0 0 6px var(--c2); }
+ 
+.sbadge {
+  font-family:var(--mono); font-size:11px; padding:3px 8px;
+  border-radius:20px; border:1px solid;
+}
+.s-on  { color:var(--c2);    border-color:rgba(52,211,153,.4);   background:rgba(52,211,153,.08); }
+.s-off { color:var(--muted); border-color:rgba(86,96,112,.4);    background:rgba(86,96,112,.06); }
+ 
+/* METRICS */
+.metrics { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; padding:14px; }
+.mc {
+  background:var(--card); border:1px solid var(--border);
+  border-radius:9px; padding:13px 15px; position:relative; overflow:hidden;
+}
+.mc::after { content:''; position:absolute; top:0; left:0; right:0; height:2px; }
+.mc.c1::after { background:var(--c1); }
+.mc.c2::after { background:var(--c2); }
+.ml { font-size:10px; text-transform:uppercase; letter-spacing:.8px; color:var(--muted); margin-bottom:7px; }
+.mv { font-family:var(--mono); font-size:26px; font-weight:700; line-height:1; }
+.mu { font-size:12px; color:var(--muted); margin-left:2px; }
+.ms { font-size:11px; color:var(--muted); margin-top:4px; }
+ 
+/* ALERT CHIP */
+.ac {
+  display:inline-block; font-size:11px; font-weight:600;
+  padding:2px 7px; border-radius:5px; margin-top:6px;
+}
+.ac-ok     { background:rgba(52,211,153,.12); color:var(--c2); }
+.ac-warn   { background:rgba(251,191,36,.12);  color:var(--warn); }
+.ac-danger { background:rgba(248,113,113,.12); color:var(--danger); animation:blink .9s step-start infinite; }
+@keyframes blink { 50%{opacity:.25} }
+ 
+/* CHART */
+.chart-box { padding:10px 14px 14px; height:190px; position:relative; }
+ 
+/* MAP */
+.map-panel { height:320px; border-radius:var(--r); overflow:hidden; border:1px solid var(--border); }
+#map { width:100%; height:100%; }
+ 
+/* FOOTER */
+.ls { font-size:10px; font-family:var(--mono); color:var(--muted); padding:6px 16px 12px; text-align:right; }
+footer { text-align:center; color:var(--muted); font-size:11px; padding:18px; border-top:1px solid var(--border); margin-top:12px; }
+</style>
+</head>
+<body>
+ 
+<header>
+  <div class="logo">
+    <span class="pulse-ring"></span>
+    IoT MQTT Dashboard
+  </div>
+  <span class="badge off" id="ws-badge">⚫ connecting…</span>
+</header>
+ 
+<div class="wrap">
+ 
+  <!-- MAP -->
+  <div class="map-row">
+    <div class="map-panel">
+      <div id="map"></div>
+    </div>
+  </div>
+ 
+  <div class="grid">
+ 
+    <!-- STATION 1 -->
+    <div class="panel">
+      <div class="ph">
+        <div class="ph-title"><span class="dot d1"></span> Station 1 — Health</div>
+        <span class="sbadge s-off" id="s1-status">offline</span>
+      </div>
+      <div class="metrics">
+        <div class="mc c1">
+          <div class="ml">Temperature</div>
+          <div class="mv" id="s1-temp">--<span class="mu">°C</span></div>
+        </div>
+        <div class="mc c1">
+          <div class="ml">Humidity</div>
+          <div class="mv" id="s1-hum">--<span class="mu">%</span></div>
+        </div>
+        <div class="mc c1">
+          <div class="ml">Heart Rate</div>
+          <div class="mv" id="s1-pulse">--<span class="mu">bpm</span></div>
+          <div class="ms" id="s1-pulse-note">place finger on sensor</div>
+        </div>
+      </div>
+      <div class="chart-box"><canvas id="c1"></canvas></div>
+      <div class="ls" id="s1-ls">—</div>
+    </div>
+ 
+    <!-- STATION 2 -->
+    <div class="panel">
+      <div class="ph">
+        <div class="ph-title"><span class="dot d2"></span> Station 2 — Environment</div>
+        <span class="sbadge s-off" id="s2-status">offline</span>
+      </div>
+      <div class="metrics">
+        <div class="mc c2">
+          <div class="ml">Temperature</div>
+          <div class="mv" id="s2-temp">--<span class="mu">°C</span></div>
+        </div>
+        <div class="mc c2">
+          <div class="ml">Humidity</div>
+          <div class="mv" id="s2-hum">--<span class="mu">%</span></div>
+        </div>
+        <div class="mc c2">
+          <div class="ml">Smoke (MQ-2)</div>
+          <div class="mv" id="s2-smoke">--<span class="mu">raw</span></div>
+          <span class="ac ac-ok" id="s2-smoke-chip">CLEAR</span>
+        </div>
+        <div class="mc c2">
+          <div class="ml">Rain Sensor</div>
+          <div class="mv" id="s2-rain">--</div>
+          <span class="ac ac-ok" id="s2-rain-chip">DRY</span>
+        </div>
+      </div>
+      <div class="chart-box"><canvas id="c2"></canvas></div>
+      <div class="ls" id="s2-ls">—</div>
+    </div>
+ 
+  </div>
+</div>
+ 
+<footer>Station 1: ESP8266 + DHT22 + Pulse + OLED &nbsp;·&nbsp; Station 2: ESP8266 + DHT11 + MQ-2 + Rain &nbsp;·&nbsp; MQTT via HiveMQ</footer>
+ 
+<script>
+// ══════════════════════════════════════════
+// MAP
+// ══════════════════════════════════════════
+const map = L.map('map').setView([41.305, 69.26], 13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution:'© OpenStreetMap', maxZoom:19
+}).addTo(map);
+ 
+function pinIcon(color, emoji) {
+  return L.divIcon({
+    className:'',
+    html:`<div style="width:36px;height:36px;background:${color};border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:2px solid #fff;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 10px ${color}88"><span style="transform:rotate(45deg);font-size:15px">${emoji}</span></div>`,
+    iconSize:[36,36], iconAnchor:[18,36], popupAnchor:[0,-38]
+  });
+}
+ 
+L.marker([41.2995, 69.2401], { icon: pinIcon('#38bdf8','❤️') })
+  .addTo(map)
+  .bindPopup('<b>Station 1 — Health Monitor</b><br>Building A, Tashkent<br><small>DHT22 · Pulse Sensor · OLED</small>');
+ 
+L.marker([41.3111, 69.2797], { icon: pinIcon('#34d399','🌧️') })
+  .addTo(map)
+  .bindPopup('<b>Station 2 — Environment Monitor</b><br>Building B, Tashkent<br><small>DHT11 · MQ-2 · Rain Sensor</small>');
+ 
+// ══════════════════════════════════════════
+// CHARTS
+// ══════════════════════════════════════════
+const chartOpts = {
+  responsive:true, maintainAspectRatio:false,
+  animation:{duration:250},
+  plugins:{ legend:{ labels:{ color:'#556070', font:{size:11,family:'Space Grotesk'} } } },
+  scales:{
+    x:{ ticks:{color:'#3a4a5a',font:{size:9}}, grid:{color:'#1c2a40'} },
+    y:{ ticks:{color:'#3a4a5a',font:{size:9}}, grid:{color:'#1c2a40'} }
+  }
+};
+ 
+function makeChart(id, datasets) {
+  return new Chart(document.getElementById(id).getContext('2d'), {
+    type:'line',
+    data:{ labels:[], datasets: datasets.map(d=>({
+      ...d, data:[], borderWidth:1.5, pointRadius:2, tension:.4, backgroundColor:'transparent'
+    }))},
+    options: chartOpts
+  });
+}
+ 
+const ch1 = makeChart('c1', [
+  { label:'Temp °C',  borderColor:'#38bdf8' },
+  { label:'Hum %',   borderColor:'#818cf8' },
+  { label:'BPM',     borderColor:'#fb7185' }
+]);
+const ch2 = makeChart('c2', [
+  { label:'Temp °C',   borderColor:'#34d399' },
+  { label:'Hum %',    borderColor:'#818cf8' },
+  { label:'Smoke/10', borderColor:'#fbbf24' }
+]);
+ 
+function pushChart(chart, values) {
+  const t = new Date().toLocaleTimeString();
+  chart.data.labels.push(t);
+  values.forEach((v,i) => chart.data.datasets[i].data.push(v));
+  if (chart.data.labels.length > 30) {
+    chart.data.labels.shift();
+    chart.data.datasets.forEach(ds => ds.data.shift());
+  }
+  chart.update('none');
+}
+ 
+// ══════════════════════════════════════════
+// DOM HELPERS
+// ══════════════════════════════════════════
+function setNum(id, val, decimals=1) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.childNodes[0].textContent = (val !== null && val !== undefined) ? val.toFixed(decimals) : '--';
+}
+function setText(id, txt) {
+  const el = document.getElementById(id); if(el) el.textContent = txt;
+}
+function setStatus(id, online) {
+  const el = document.getElementById(id); if(!el) return;
+  el.textContent = online ? 'online' : 'offline';
+  el.className   = 'sbadge ' + (online ? 's-on' : 's-off');
+}
+function setChip(id, text, cls) {
+  const el = document.getElementById(id); if(!el) return;
+  el.textContent = text; el.className = 'ac ' + cls;
+}
+function ago(ts) {
+  if (!ts) return '—';
+  const s = Math.floor((Date.now()-ts)/1000);
+  if (s < 10) return 'just now';
+  if (s < 60) return s+'s ago';
+  return Math.floor(s/60)+'m ago';
+}
+function bpmNote(bpm) {
+  if (!bpm || bpm === 0) return 'place finger on sensor';
+  if (bpm < 50) return '⚠ very low';
+  if (bpm < 60) return 'low normal';
+  if (bpm <= 100) return '✓ normal';
+  if (bpm <= 120) return 'elevated';
+  return '⚠ high';
+}
+ 
+// ══════════════════════════════════════════
+// RENDER FULL STATE (on first connect)
+// ══════════════════════════════════════════
+function renderState(state) {
+  const s1 = state.station1, s2 = state.station2;
+ 
+  setStatus('s1-status', s1.status === 'online');
+  setNum('s1-temp',  s1.temperature);
+  setNum('s1-hum',   s1.humidity);
+  if (s1.pulse !== null) {
+    const el = document.getElementById('s1-pulse');
+    if(el) el.childNodes[0].textContent = s1.pulse > 0 ? s1.pulse : '--';
+    setText('s1-pulse-note', bpmNote(s1.pulse));
+  }
+  if (s1.lastSeen) setText('s1-ls', 'Last seen: ' + ago(s1.lastSeen));
+ 
+  setStatus('s2-status', s2.status === 'online');
+  setNum('s2-temp',  s2.temperature);
+  setNum('s2-hum',   s2.humidity);
+  if (s2.smoke !== null) {
+    const el = document.getElementById('s2-smoke');
+    if(el) el.childNodes[0].textContent = s2.smoke;
+    setChip('s2-smoke-chip', s2.smoke_alert ? '🔥 SMOKE!' : 'CLEAR',
+            s2.smoke_alert ? 'ac-danger' : 'ac-ok');
+  }
+  const rainEl = document.getElementById('s2-rain');
+  if(rainEl) rainEl.childNodes[0].textContent = s2.rain_detected ? 'WET' : 'DRY';
+  setChip('s2-rain-chip', s2.rain_detected ? '🌧 RAINING' : 'DRY',
+          s2.rain_detected ? 'ac-warn' : 'ac-ok');
+  if (s2.lastSeen) setText('s2-ls', 'Last seen: ' + ago(s2.lastSeen));
+ 
+  // Rebuild charts from history
+  rebuildChart(ch1, s1.history, ['temperature','humidity','pulse'], [1,1,0]);
+  rebuildChart(ch2, s2.history, ['temperature','humidity','smoke'],  [1,1,0], [null,null,10]);
+}
+ 
+function rebuildChart(chart, history, keys, decimals, divisors) {
+  if (!history) return;
+  const arrs = keys.map(k => history[k] || []);
+  const n = Math.max(...arrs.map(a=>a.length));
+  for (let i=0; i<n; i++) {
+    const t = new Date(arrs.find(a=>a[i])?.[i]?.t || Date.now()).toLocaleTimeString();
+    const vals = arrs.map((a,j) => {
+      const v = a[i]?.v;
+      if (v === undefined || v === null) return null;
+      const div = divisors?.[j] || 1;
+      return v / div;
+    });
+    chart.data.labels.push(t);
+    vals.forEach((v,j) => chart.data.datasets[j].data.push(v));
+  }
+  if (chart.data.labels.length > 30) {
+    const trim = chart.data.labels.length - 30;
+    chart.data.labels.splice(0, trim);
+    chart.data.datasets.forEach(ds => ds.data.splice(0, trim));
+  }
+  chart.update('none');
+}
+ 
+// ══════════════════════════════════════════
+// HANDLE LIVE UPDATE
+// ══════════════════════════════════════════
+function handleUpdate(msg) {
+  const { station, key, state } = msg;
+  renderState(state);
+ 
+  // Push chart point on every update
+  if (station === 'station1') {
+    const s = state.station1;
+    if (['temperature','humidity','pulse'].some(k=>k===key)) {
+      pushChart(ch1, [s.temperature, s.humidity, s.pulse]);
+    }
+  }
+  if (station === 'station2') {
+    const s = state.station2;
+    if (['temperature','humidity','smoke'].some(k=>k===key)) {
+      pushChart(ch2, [s.temperature, s.humidity, s.smoke !== null ? s.smoke/10 : null]);
+    }
+  }
+}
+ 
+// ══════════════════════════════════════════
+// WEBSOCKET
+// ══════════════════════════════════════════
+let ws, retryTimer;
+function connect() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${location.host}`);
+ 
+  ws.onopen = () => {
+    const b = document.getElementById('ws-badge');
+    b.textContent = '🟢 Live'; b.className = 'badge on';
+    clearTimeout(retryTimer);
+  };
+  ws.onclose = () => {
+    const b = document.getElementById('ws-badge');
+    b.textContent = '⚫ reconnecting'; b.className = 'badge off';
+    retryTimer = setTimeout(connect, 3000);
+  };
+  ws.onmessage = e => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.type === 'init')   renderState(msg.state);
+      if (msg.type === 'update') handleUpdate(msg);
+    } catch(err) { console.error(err); }
+  };
+}
+connect();
+</script>
+</body>
+</html>
